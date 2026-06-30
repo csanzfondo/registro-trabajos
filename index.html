@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Registro de trabajos</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#16243C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Registro de trabajos">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --ink:#16243C;
+    --ink-soft:#22344C;
+    --steel:#5B6B82;
+    --canvas:#EEF1F5;
+    --surface:#FFFFFF;
+    --signal:#D97A34;
+    --signal-soft:#FBE7D3;
+    --line:#E3E6EB;
+    --blue:#2D6CB0;
+    --blue-soft:#E1ECF7;
+    --green:#2F7D5C;
+    --green-soft:#E1F1E9;
+    --red:#C23B3B;
+    --red-soft:#FAE3E3;
+    --grey-soft:#E7E9ED;
+    --text-muted:#7C8798;
+    --radius:12px;
+    --radius-lg:20px;
+    --shadow:0 18px 40px -14px rgba(22,36,60,.32);
+    --font-display:'Archivo', sans-serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--canvas);font-family:var(--font-body);color:var(--ink);}
+  body{display:flex;justify-content:center;padding:22px 12px;min-height:100vh;}
+
+  .device{
+    width:100%;max-width:420px;background:var(--canvas);border-radius:30px;
+    box-shadow:var(--shadow);border:1px solid rgba(22,36,60,.07);
+    display:flex;flex-direction:column;overflow:hidden;height:min(810px,92vh);
+    position:relative;
+  }
+
+  /* ---------- App bar ---------- */
+  .appbar{background:var(--ink);color:#fff;padding:20px 22px 16px;flex-shrink:0;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{width:38px;height:38px;border-radius:9px;background:var(--signal);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;color:var(--ink);font-size:14px;flex-shrink:0;}
+  .brand-text{line-height:1.25;}
+  .brand-name{font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:.2px;}
+  .brand-sub{font-family:var(--font-body);font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:#A9B5C8;margin-top:1px;}
+
+  /* ---------- Main / screens ---------- */
+  main{flex:1;overflow-y:auto;padding:20px 20px 28px;-webkit-overflow-scrolling:touch;}
+  .screen{display:none;}
+  .screen.active{display:block;animation:fade .18s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .screen-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;gap:10px;}
+  .screen-title{font-family:var(--font-display);font-weight:800;font-size:19px;color:var(--ink);}
+  .screen-desc{font-size:12.5px;color:var(--text-muted);margin-top:2px;}
+
+  .ticket{display:inline-flex;align-items:center;gap:5px;background:var(--ink);color:#fff;padding:7px 11px;border-radius:8px;font-family:var(--font-mono);font-weight:700;font-size:12.5px;white-space:nowrap;}
+  .ticket .hash{color:var(--signal);}
+
+  /* ---------- Form ---------- */
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--steel);margin-bottom:7px;}
+  .row-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  input[type=text],input[type=date],input[type=time],input[type=number],input[type=email],textarea{
+    width:100%;border:1.5px solid var(--line);background:var(--surface);border-radius:10px;
+    padding:11px 12px;font-family:var(--font-body);font-size:14.5px;color:var(--ink);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  textarea{resize:vertical;min-height:64px;line-height:1.4;}
+  input:focus,textarea:focus{outline:none;border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft);}
+  input.err,textarea.err{border-color:var(--red);}
+  .err-msg{font-size:11.5px;color:var(--red);margin-top:5px;display:none;}
+  .err-msg.show{display:block;}
+
+  .chip-group{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{padding:8px 13px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);
+    font-size:12.5px;font-weight:600;color:var(--steel);cursor:pointer;font-family:var(--font-body);
+    transition:all .12s;user-select:none;}
+  .chip.add{border-style:dashed;color:var(--steel);}
+  .chip-add-input{display:none;}
+  .chip-add-input.show{display:inline-flex;align-items:center;gap:6px;}
+  .chip-add-input input{width:120px;padding:8px 10px;border-radius:999px;font-size:12.5px;}
+  .chip-add-input button{border:none;background:var(--ink);color:#fff;border-radius:999px;padding:7px 11px;font-size:12px;font-weight:700;cursor:pointer;}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:11px 13px;}
+  .toggle-row label{margin:0;}
+  .switch{position:relative;width:42px;height:24px;flex-shrink:0;}
+  .switch input{display:none;}
+  .switch .track{position:absolute;inset:0;background:var(--grey-soft);border-radius:999px;transition:.15s;}
+  .switch .knob{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.15s;}
+  .switch input:checked + .track{background:var(--green);}
+  .switch input:checked + .track + .knob{transform:translateX(18px);}
+
+  .hours-badge{display:flex;align-items:center;justify-content:space-between;background:var(--ink);
+    border-radius:14px;padding:15px 17px;color:#fff;margin-top:2px;}
+  .hours-badge .left .caption{font-size:9.5px;letter-spacing:1.6px;text-transform:uppercase;color:#9FB0C9;}
+  .hours-badge .left .value{font-family:var(--font-mono);font-size:24px;font-weight:700;margin-top:3px;}
+  .hours-badge .left .value .unit{font-size:12px;color:var(--signal);margin-left:3px;font-weight:600;}
+  .hours-badge .icon{opacity:.55;}
+
+  .btn{width:100%;border:none;padding:14px;border-radius:11px;font-family:var(--font-display);
+    font-weight:700;font-size:14.5px;letter-spacing:.2px;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:8px;transition:transform .08s, opacity .15s;}
+  .btn:active{transform:scale(.985);}
+  .btn-primary{background:var(--signal);color:#fff;margin-top:6px;}
+  .btn-secondary{background:transparent;color:var(--steel);border:1.5px solid var(--line);}
+  .btn-danger{background:var(--red);color:#fff;}
+  .btn-ghost{background:var(--grey-soft);color:var(--ink);}
+  .btn-row{display:flex;gap:10px;margin-top:14px;}
+  .btn-row .btn{margin-top:0;}
+
+  hr.sep{border:none;border-top:1px solid var(--line);margin:22px 0;}
+
+  /* ---------- Historial ---------- */
+  .search-wrap{position:relative;margin-bottom:12px;}
+  .search-wrap input{padding-left:36px;}
+  .search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-muted);}
+  .filter-scroll{display:flex;gap:7px;overflow-x:auto;padding-bottom:14px;margin-bottom:4px;}
+  .filter-scroll::-webkit-scrollbar{display:none;}
+  .filter-chip{flex-shrink:0;padding:7px 12px;border-radius:999px;border:1.5px solid var(--line);
+    background:var(--surface);font-size:12px;font-weight:600;color:var(--steel);cursor:pointer;white-space:nowrap;}
+  .filter-chip.active{background:var(--ink);border-color:var(--ink);color:#fff;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 15px;margin-bottom:10px;cursor:pointer;}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+  .card-client{font-family:var(--font-display);font-weight:700;font-size:14.5px;color:var(--ink);}
+  .card-activity{font-size:12.5px;color:var(--steel);margin-top:3px;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .card-meta{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:11.5px;color:var(--text-muted);flex-wrap:wrap;}
+  .card-meta span{display:flex;align-items:center;gap:4px;}
+  .status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .card-num{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);white-space:nowrap;}
+
+  .card-detail{display:none;border-top:1px dashed var(--line);margin-top:12px;padding-top:12px;font-size:12.5px;color:var(--steel);}
+  .card-detail.show{display:block;}
+  .card-detail .d-row{margin-bottom:8px;}
+  .card-detail .d-label{font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);font-weight:700;margin-bottom:2px;}
+  .card-actions{display:flex;gap:8px;margin-top:12px;}
+  .icon-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:9px;
+    border:1.5px solid var(--line);background:var(--surface);font-size:12px;font-weight:600;color:var(--steel);cursor:pointer;}
+  .icon-btn.danger{color:var(--red);border-color:var(--red-soft);background:var(--red-soft);}
+
+  .empty-state{text-align:center;padding:50px 18px;color:var(--text-muted);}
+  .empty-state svg{margin-bottom:14px;opacity:.5;}
+  .empty-state .t1{font-family:var(--font-display);font-weight:700;color:var(--ink);font-size:15px;margin-bottom:5px;}
+  .empty-state .t2{font-size:12.5px;line-height:1.5;}
+
+  .export-fab{position:absolute;width:46px;height:46px;border-radius:50%;background:var(--ink);color:#fff;
+    display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;box-shadow:0 8px 18px -4px rgba(22,36,60,.45);}
+
+  /* ---------- Ajustes ---------- */
+  .settings-section{margin-bottom:24px;}
+  .settings-title{font-family:var(--font-display);font-weight:700;font-size:13.5px;color:var(--ink);margin-bottom:4px;}
+  .settings-help{font-size:11.5px;color:var(--text-muted);line-height:1.5;margin-bottom:12px;}
+  .tag-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;}
+  .tag{display:flex;align-items:center;gap:6px;background:var(--blue-soft);color:var(--blue);
+    padding:6px 6px 6px 11px;border-radius:999px;font-size:12px;font-weight:600;}
+  .tag button{border:none;background:none;color:var(--blue);cursor:pointer;display:flex;padding:2px;}
+
+  .stat-row{display:flex;gap:10px;margin-bottom:18px;}
+  .stat-box{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;}
+  .stat-box .num{font-family:var(--font-mono);font-weight:700;font-size:19px;color:var(--ink);}
+  .stat-box .lbl{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-top:3px;}
+
+  .confirm-row{display:none;gap:8px;margin-top:10px;}
+  .confirm-row.show{display:flex;}
+
+  /* ---------- Bottom nav ---------- */
+  .tabbar{display:flex;background:var(--surface);border-top:1px solid var(--line);flex-shrink:0;}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:11px 0 13px;
+    color:var(--text-muted);font-size:10.5px;font-weight:600;background:none;border:none;cursor:pointer;font-family:var(--font-body);}
+  .tab.active{color:var(--ink);}
+  .tab.active svg{color:var(--signal);}
+
+  .toast{position:absolute;bottom:84px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;
+    opacity:0;transition:.2s;pointer-events:none;box-shadow:0 10px 24px -8px rgba(0,0,0,.4);white-space:nowrap;z-index:10;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .loading-veil{position:absolute;inset:0;background:var(--canvas);display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:10px;z-index:20;}
+  .loading-veil .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-veil span{font-size:12px;color:var(--text-muted);font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="device">
+  <div class="loading-veil" id="loadingVeil"><div class="spin"></div><span>Cargando partes…</span></div>
+
+  <div class="appbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1z"/><rect x="5" y="6" width="14" height="15" rx="2"/><path d="M9 11h6M9 15h6"/></svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">Registro de trabajos</div>
+        <div class="brand-sub">Detalles</div>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <!-- ===================== NUEVO PARTE ===================== -->
+    <section class="screen active" id="screen-nuevo">
+      <div class="screen-head">
+        <div>
+          <div class="screen-title" id="formTitle">Nuevo parte</div>
+          <div class="screen-desc">Rellena los datos del trabajo realizado</div>
+        </div>
+        <div class="ticket"><span class="hash">Nº</span><span id="ticketPreview">—</span></div>
+      </div>
+
+      <form id="parteForm" novalidate>
+        <div class="field">
+          <label for="f-numero">Nº de parte</label>
+          <input type="text" id="f-numero" inputmode="numeric" placeholder="Ej. 506702">
+          <div class="err-msg" id="err-numero">Indica el número de parte.</div>
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label for="f-avisoFecha">Fecha aviso</label>
+            <input type="date" id="f-avisoFecha">
+          </div>
+          <div class="field">
+            <label for="f-fechaReal">Fecha realización</label>
+            <input type="date" id="f-fechaReal">
+            <div class="err-msg" id="err-fechaReal">Indica la fecha de realización.</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-empresa">Empresa / cliente</label>
+          <input type="text" id="f-empresa" list="empresasList" placeholder="Ej. FONDOMOVIL">
+          <datalist id="empresasList"></datalist>
+          <div class="err-msg" id="err-empresa">Indica la empresa o cliente.</div>
+        </div>
+
+        <div class="field">
+          <label for="f-actividad">Actividad realizada</label>
+          <textarea id="f-actividad" placeholder="Describe el trabajo realizado…"></textarea>
+          <div class="err-msg" id="err-actividad">Describe la actividad realizada.</div>
+        </div>
+
+        <div class="field">
+          <label>Estado</label>
+          <div class="chip-group" id="estadoChips"></div>
+          <div class="err-msg" id="err-estado">Selecciona un estado.</div>
+        </div>
+
+        <div class="field">
+          <label>Operario</label>
+          <div class="chip-group" id="operarioChips"></div>
+          <div class="err-msg" id="err-operario">Selecciona al menos un operario.</div>
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label for="f-horaInicio">Hora inicio</label>
+            <input type="time" id="f-horaInicio">
+          </div>
+          <div class="field">
+            <label for="f-horaFin">Hora fin</label>
+            <input type="time" id="f-horaFin">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Total horas</label>
+          <div class="hours-badge">
+            <div class="left">
+              <div class="caption">Calculado automáticamente</div>
+              <div class="value" id="totalHorasValue">0h <span class="unit">00m</span></div>
+            </div>
+            <svg class="icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="toggle-row">
+            <label style="margin:0;">Facturada</label>
+            <label class="switch">
+              <input type="checkbox" id="f-facturada">
+              <span class="track"></span><span class="knob"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-notas">Notas (opcional)</label>
+          <textarea id="f-notas" placeholder="Observaciones, materiales usados, incidencias…"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <span id="saveBtnLabel">Guardar parte</span>
+        </button>
+        <button type="button" class="btn btn-secondary" style="margin-top:8px;" id="cancelEditBtn" hidden>Cancelar edición</button>
+      </form>
+    </section>
+
+    <!-- ===================== PARTES ANTERIORES ===================== -->
+    <section class="screen" id="screen-historial">
+      <div class="screen-head">
+        <div>
+          <div class="screen-title">Partes anteriores</div>
+          <div class="screen-desc" id="historialCount">0 partes registrados</div>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+        <input type="text" id="searchInput" placeholder="Buscar por cliente, actividad u operario…">
+      </div>
+
+      <div class="filter-scroll" id="filterChips"></div>
+
+      <div id="historialList"></div>
+    </section>
+
+    <!-- ===================== AJUSTES ===================== -->
+    <section class="screen" id="screen-ajustes">
+      <div class="screen-head">
+        <div>
+          <div class="screen-title">Ajustes</div>
+          <div class="screen-desc">Configura el envío y los datos de la app</div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-box"><div class="num" id="statTotal">0</div><div class="lbl">Partes</div></div>
+        <div class="stat-box"><div class="num" id="statHoras">0</div><div class="lbl">Horas totales</div></div>
+        <div class="stat-box"><div class="num" id="statMes">0</div><div class="lbl">Este mes</div></div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-title">Correo para el envío de partes</div>
+        <div class="settings-help">Define la dirección a la que quieres remitir los partes. Puedes cambiarla cuando quieras.</div>
+        <div class="field" style="margin-bottom:10px;">
+          <input type="email" id="f-emailDestino" placeholder="nombre@empresa.com">
+        </div>
+        <button class="btn btn-ghost" id="saveEmailBtn">Guardar correo</button>
+      </div>
+
+      <hr class="sep">
+
+      <div class="settings-section">
+        <div class="settings-title">Operarios habituales</div>
+        <div class="settings-help">Aparecerán como opción rápida al rellenar un parte nuevo.</div>
+        <div class="tag-list" id="operariosTagList"></div>
+        <div class="chip-add-input show" style="margin-top:10px;">
+          <input type="text" id="newOperarioInput" placeholder="Nombre del operario">
+          <button id="addOperarioBtn">Añadir</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="settings-section">
+        <div class="settings-title">Exportar e enviar</div>
+        <div class="settings-help">Genera el Excel con todos los partes registrados, en el mismo formato que la plantilla original.</div>
+        <button class="btn btn-primary" id="exportBtnSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+          Exportar a Excel
+        </button>
+        <button class="btn btn-ghost" id="emailBtnSettings" style="margin-top:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+          Abrir correo con resumen
+        </button>
+        <div class="settings-help" style="margin-top:8px;">El correo se abre con un resumen; adjunta el Excel exportado manualmente antes de enviarlo.</div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="settings-section">
+        <div class="settings-title">Datos</div>
+        <div class="settings-help">Borra todos los partes guardados en este dispositivo. Esta acción no se puede deshacer.</div>
+        <button class="btn btn-danger" id="deleteAllBtn">Borrar todos los partes</button>
+        <div class="confirm-row" id="deleteConfirmRow">
+          <button class="btn btn-secondary" id="cancelDeleteBtn">Cancelar</button>
+          <button class="btn btn-danger" id="confirmDeleteBtn">Sí, borrar todo</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="nuevo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      Nuevo
+    </button>
+    <button class="tab" data-tab="historial">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Anteriores
+    </button>
+    <button class="tab" data-tab="ajustes">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h0a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Ajustes
+    </button>
+  </nav>
+</div>
+
+<script>
+const ESTADOS = [
+  {key:'No iniciada', color:'var(--text-muted)', soft:'var(--grey-soft)'},
+  {key:'En curso',     color:'var(--blue)',      soft:'var(--blue-soft)'},
+  {key:'Pendiente',    color:'var(--signal)',    soft:'var(--signal-soft)'},
+  {key:'Completada',   color:'var(--green)',     soft:'var(--green-soft)'},
+  {key:'Urgente',      color:'var(--red)',       soft:'var(--red-soft)'},
+];
+
+const RAW_SEED_PARTES = [{"numero": "506499", "avisoFecha": "", "fechaReal": "2026-04-20", "empresa": "FLEET SMART REPAIR", "actividad": "Cambio de filtros de suelo y cabinas\nMaterial_3 rollos paint-stop 0,75", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "10:00", "horaFin": "13:45", "totalHorasDecimal": 3.75, "totalHorasFormato": "3h 45m", "facturada": false, "notas": ""}, {"numero": "506497", "avisoFecha": "", "fechaReal": "2026-04-27", "empresa": "TOP LIVE", "actividad": "Desmontaje, limpieza y reparación de turbinas, regillas y filtros", "estado": "Completada", "operario": "Fernando, Iván", "horaInicio": "09:00", "horaFin": "12:00", "totalHorasDecimal": 3.0, "totalHorasFormato": "3h 00m", "facturada": false, "notas": ""}, {"numero": "506497", "avisoFecha": "", "fechaReal": "2026-04-28", "empresa": "TOP LIVE", "actividad": "Desmontaje, limpieza y reparación de turbinas, regillas y filtros", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "13:00", "horaFin": "14:30", "totalHorasDecimal": 1.5, "totalHorasFormato": "1h 30m", "facturada": false, "notas": ""}, {"numero": "506497", "avisoFecha": "", "fechaReal": "2026-04-28", "empresa": "FONDOMOVIL", "actividad": "Tiempo limpieza y reparación", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "09:00", "horaFin": "12:00", "totalHorasDecimal": 3.0, "totalHorasFormato": "3h 00m", "facturada": false, "notas": "3 horas totales - horario aprox."}, {"numero": "506498", "avisoFecha": "", "fechaReal": "2026-05-04", "empresa": "GUIJAR MOTOR", "actividad": "Desmontaje, montaje turbina limpia", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "08:30", "horaFin": "09:30", "totalHorasDecimal": 1.0, "totalHorasFormato": "1h 00m", "facturada": false, "notas": ""}, {"numero": "506399", "avisoFecha": "", "fechaReal": "2026-05-19", "empresa": "FONDOMOVIL-NAVE DISOLVENTES", "actividad": "Desmontar, limpiar y montar bomba disolvente", "estado": "Completada", "operario": "Fernando", "horaInicio": "09:00", "horaFin": "14:00", "totalHorasDecimal": 5.0, "totalHorasFormato": "5h 00m", "facturada": false, "notas": ""}, {"numero": "506400", "avisoFecha": "", "fechaReal": "2026-05-20", "empresa": "MOTOR PACIFICO", "actividad": "Colocar focos led\nCambiar turbina aspiracion", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "10:00", "horaFin": "15:00", "totalHorasDecimal": 5.0, "totalHorasFormato": "5h 00m", "facturada": false, "notas": ""}, {"numero": "506500", "avisoFecha": "", "fechaReal": "2026-05-25", "empresa": "VILASCAR", "actividad": "Desmontaje y montaje turbina, filtros, fluorescentes.\nMaterial_1 turbina\n                7 Plancha techo 3500x1000\n                14 fluorescentes led 1500", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "08:30", "horaFin": "14:30", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": "Limpieza cristales de pantallas"}, {"numero": "506651", "avisoFecha": "", "fechaReal": "2026-05-25", "empresa": "CASTELLANA DE MEDIO AMBIENTE", "actividad": "Cargar elevadora y llevar a Casma", "estado": "Completada", "operario": "Fernando", "horaInicio": "10:00", "horaFin": "18:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-23", "empresa": "VERGARA MOTOR", "actividad": "Desmontaje de la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-24", "empresa": "VERGARA MOTOR", "actividad": "Desmontaje de la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-25", "empresa": "VERGARA MOTOR", "actividad": "Desmontaje de la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-26", "empresa": "VERGARA MOTOR", "actividad": "Desmontaje de la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-27", "empresa": "VERGARA MOTOR", "actividad": "Moviendo el GRUPO hacia atrás para colocar vena", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-30", "empresa": "VERGARA MOTOR", "actividad": "Montando la vena de aire", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-03-31", "empresa": "VERGARA MOTOR", "actividad": "Recogiendo rejillas para limpiar, limpiar suelo", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-01", "empresa": "VERGARA MOTOR", "actividad": "Picando las traviesas del suelo para limpiarlas", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día- Fernando estaba de vacaciones, pero estuvo con Alberto de Bobinados Moreno viendo las conexiones de los conductos."}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-13", "empresa": "VERGARA MOTOR", "actividad": "Cerrando la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-14", "empresa": "VERGARA MOTOR", "actividad": "Cerrando la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-15", "empresa": "VERGARA MOTOR", "actividad": "Cerrando la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-16", "empresa": "VERGARA MOTOR", "actividad": "Cerrando la parte trasera de la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-17", "empresa": "VERGARA MOTOR", "actividad": "Preparando soporte y colgando cuadro eléctrico", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-21", "empresa": "VERGARA MOTOR", "actividad": "Preparando material para el Box y arrancando la cabina", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-27", "empresa": "VERGARA MOTOR", "actividad": "Montando el Box", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-28", "empresa": "VERGARA MOTOR", "actividad": "Montando el Box", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-04-29", "empresa": "VERGARA MOTOR", "actividad": "Montando el Box", "estado": "Completada", "operario": "Fernando, Iván, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": "Todo el día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-05-22", "empresa": "VERGARA MOTOR", "actividad": "Cambiando la aspiración Rupes y colocando enchufes en el Box de pintura", "estado": "Completada", "operario": "Fernando, Iván", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506652", "avisoFecha": "", "fechaReal": "2026-05-27", "empresa": "VERGARA MOTOR", "actividad": "Conectando las lavadoras de pistolas y cuadro de la centralita de la vena de aire", "estado": "Completada", "operario": "Fernando, Constant", "horaInicio": "", "horaFin": "", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": "1/2 día"}, {"numero": "506656", "avisoFecha": "", "fechaReal": "2026-05-21", "empresa": "PLANTA CRRP", "actividad": "Llevar elevadora al CRRP, descolgar foco del techo de la zona de los depósitos de aceite y reparar tubo eléctrico del resto de focos", "estado": "Completada", "operario": "Fernando, Iván", "horaInicio": "08:00", "horaFin": "11:00", "totalHorasDecimal": 3.0, "totalHorasFormato": "3h 00m", "facturada": false, "notas": "3 horas totales - horario aprox."}, {"numero": "506657", "avisoFecha": "", "fechaReal": "2026-06-01", "empresa": "MOTOR PACIFICO VALLECAS (Autofren)", "actividad": "Desmontar carteles y luminoso, cambiar 2 fluorescentes de 1200 y 1 de 1500", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "10:00", "horaFin": "12:30", "totalHorasDecimal": 2.5, "totalHorasFormato": "2h 30m", "facturada": false, "notas": ""}, {"numero": "506701", "avisoFecha": "", "fechaReal": "2026-05-28", "empresa": "VALORIZA", "actividad": "Cambio de filtros de techo, suelo y motores de la cabina.\nMaterial_8 plancha de techo 1910 x 1390\n              _2 rollo paint-stop 0,75\n              _4 plancha prefiltro blanco 2050 x 800", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "08:30", "horaFin": "16:00", "totalHorasDecimal": 7.5, "totalHorasFormato": "7h 30m", "facturada": false, "notas": "Limpieza cristales de pantallas y puertas"}, {"numero": "506701", "avisoFecha": "", "fechaReal": "2026-05-29", "empresa": "VALORIZA", "actividad": "Cambio de filtros de techo, suelo y motores de la cabina.", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": "Limpieza cristales de pantalla y puertas"}, {"numero": "506663", "avisoFecha": "", "fechaReal": "2026-06-10", "empresa": "GUIJAR MOTOR", "actividad": "Cambiar Taper de la polea de la turbina Rupes\n y montar las correas.\nMaterial_1 taper de 25", "estado": "Completada", "operario": "Fernando", "horaInicio": "11:20", "horaFin": "11:50", "totalHorasDecimal": 0.5, "totalHorasFormato": "0h 30m", "facturada": false, "notas": "Bobinados Moreno_Alb.26/001713"}, {"numero": "506664", "avisoFecha": "", "fechaReal": "2026-06-10", "empresa": "AUTOS MOBAX", "actividad": "Colocar válvula de retención en tubería de \naspiración de la bomba del quemador de la \ncabina Saico.\nMaterial_1 válvula de retención\n              _2 racores 8 x 3/8\"", "estado": "Completada", "operario": "Fernando", "horaInicio": "12:30", "horaFin": "12:55", "totalHorasDecimal": 0.42, "totalHorasFormato": "0h 25m", "facturada": false, "notas": ""}, {"numero": "506702", "avisoFecha": "", "fechaReal": "2026-06-02", "empresa": "TALLERES VILLARRUBIA", "actividad": "Desmontaje de turbina de salida de sustitución,\nmontaje de turbina de cliente limpia y equilibrada. Regular presión de la cabina.", "estado": "Completada", "operario": "Iván, Constant", "horaInicio": "10:15", "horaFin": "12:30", "totalHorasDecimal": 2.25, "totalHorasFormato": "2h 15m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-05-19", "empresa": "FONDOMOVIL", "actividad": "Reparando Turbinas de aspiración Rupes", "estado": "Completada", "operario": "Iván, Constantin, Fernando", "horaInicio": "08:00", "horaFin": "12:00", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-05-21", "empresa": "FONDOMOVIL", "actividad": "Con el técnico de Presser. Reparando pulos anulados de contrato caídos", "estado": "Completada", "operario": "Fernando", "horaInicio": "10:00", "horaFin": "14:00", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-05-27", "empresa": "FONDOMOVIL", "actividad": "Ir a la tienda de Valladolid a recoger una rampa de la cabina de Cebrián (Almería)", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-06-03", "empresa": "FONDOMOVIL", "actividad": "Recogiendo las zonas de inspección de la OCA de Contraincendios. Con los de Telefónica y la avería.", "estado": "Completada", "operario": "Iván, Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-06-04", "empresa": "FONDOMOVIL", "actividad": "Con los técnicos de la OCA de Contraincendios. Inspección de los extintores.", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-06-04", "empresa": "FONDOMOVIL", "actividad": "Con el técnico de Telefónica. Inspección OCA Contraincendios.", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": ""}, {"numero": "506660", "avisoFecha": "", "fechaReal": "2026-06-04", "empresa": "FONDOMOVIL", "actividad": "Con los técnicos de la OCA de Contraincendios. Supervisión de la inspección.", "estado": "Completada", "operario": "Fernando", "horaInicio": "10:00", "horaFin": "14:00", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-11", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Iván, Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-12", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Iván, Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-15", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-16", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-18", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-19", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-22", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-23", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-24", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-25", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506666", "avisoFecha": "", "fechaReal": "2026-06-26", "empresa": "FONDOMOVIL", "actividad": "Modificando pantallas de fluorescentes del Almacén", "estado": "Completada", "operario": "Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-05", "empresa": "CEBRIÁN", "actividad": "Descargando la Cabina en el Taller", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-06", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-07", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-08", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina (hasta las 14:00, resto viaje)", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-09", "empresa": "CEBRIÁN", "actividad": "Arganda: preparando piezas para las espatas", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-12", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-13", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-14", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-05-15", "empresa": "CEBRIÁN", "actividad": "Montando la Cabina (hasta las 14:00, resto viaje)", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "14:00", "totalHorasDecimal": 6.0, "totalHorasFormato": "6h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-06-15", "empresa": "CEBRIÁN", "actividad": "Conectando la Cabina, enmarcillando, Colocando Rejillas", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506653", "avisoFecha": "", "fechaReal": "2026-06-16", "empresa": "CEBRIÁN", "actividad": "Conectando, enmarcillando, Colocando Rejillas", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "10:00", "totalHorasDecimal": 2.0, "totalHorasFormato": "2h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-05-20", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Desmontando Focos de Luz", "estado": "Completada", "operario": "Iván, Fernando", "horaInicio": "08:00", "horaFin": "10:00", "totalHorasDecimal": 2.0, "totalHorasFormato": "2h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-05-21", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Desmontando Focos de Luz", "estado": "Completada", "operario": "Iván, Fernando", "horaInicio": "08:00", "horaFin": "10:00", "totalHorasDecimal": 2.0, "totalHorasFormato": "2h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-05-26", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Montar extractor de la nave. Limpiar Compresor de aire. Preparando para la Revisión de la OCA.", "estado": "Completada", "operario": "Fernando, Iván, Constantin", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-05-28", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "OCA nave de disolvente Compresor", "estado": "Completada", "operario": "Fernando", "horaInicio": "08:00", "horaFin": "12:00", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-06-04", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Colocar Bombillas de los Focos", "estado": "Completada", "operario": "Iván, Constantin", "horaInicio": "08:00", "horaFin": "12:00", "totalHorasDecimal": 4.0, "totalHorasFormato": "4h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-06-08", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Desmontar las taquillas del depósito del Compresor de aire, taponarlo y llevarlo de agua", "estado": "Completada", "operario": "Iván, Constantin, Fernando", "horaInicio": "08:00", "horaFin": "11:00", "totalHorasDecimal": 3.0, "totalHorasFormato": "3h 00m", "facturada": false, "notas": ""}, {"numero": "506655", "avisoFecha": "", "fechaReal": "2026-06-09", "empresa": "FONDOMOVIL - NAVE DISOLVENTES", "actividad": "Pasar OCA del depósito de aire. Vaciar depósito.", "estado": "Completada", "operario": "Iván", "horaInicio": "08:00", "horaFin": "16:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}, {"numero": "506665", "avisoFecha": "", "fechaReal": "2026-06-23", "empresa": "ARELLANO MOTOR", "actividad": "Quedar aire y montar Filtros de pistolas. Arrancar la Cabina, ajustar Tiempos, Presiones y Temperaturas, arrancar con Quemador y explicar Funcionamiento de la Cabina. Prueba de Box de pintura, iluminación y extracción.", "estado": "Completada", "operario": "Fernando, Iván", "horaInicio": "10:00", "horaFin": "18:00", "totalHorasDecimal": 8.0, "totalHorasFormato": "8h 00m", "facturada": false, "notas": ""}];
+
+let partes = [];
+let settings = { email:'', operarios:['Fernando','Iván','Constantin'] };
+let selectedEstado = null;
+let selectedOperarios = new Set();
+let editingId = null;
+let activeFilter = 'Todos';
+let confirmingDeleteId = null;
+
+const $ = (id) => document.getElementById(id);
+
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+/* ---------------- Firebase / Firestore (datos compartidos entre dispositivos) ---------------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAT7Vbss2PLRBQOQUQQq6nx0n1gC42sO2A",
+  authDomain: "registro-de-partes.firebaseapp.com",
+  projectId: "registro-de-partes",
+  storageBucket: "registro-de-partes.firebasestorage.app",
+  messagingSenderId: "915360346139",
+  appId: "1:915360346139:web:94d6c2fb046257aaa2c8be",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+try{ db.enablePersistence({ synchronizeTabs: true }); }catch(e){ /* sin caché offline si no está disponible, no es crítico */ }
+
+const partesCol = db.collection('partes');
+const configDoc = db.collection('config').doc('settings');
+const seededDoc = db.collection('config').doc('seeded');
+
+let firestoreListo = false;
+
+async function loadAll(){
+  try{
+    const snap = await configDoc.get();
+    if(snap.exists) settings = Object.assign(settings, snap.data());
+  }catch(e){ /* se mantienen los valores por defecto hasta que haya conexión */ }
+
+  try{
+    const seededSnap = await seededDoc.get();
+    if(!seededSnap.exists){
+      const batch = db.batch();
+      RAW_SEED_PARTES.forEach((p, i) => {
+        const id = 'seed_' + i;
+        batch.set(partesCol.doc(id), { ...p, id, createdAt: new Date(p.fechaReal || Date.now()).getTime() + i });
+      });
+      batch.set(seededDoc, { done: true, at: Date.now() });
+      await batch.commit();
+    }
+  }catch(e){ /* si falla el sembrado por falta de conexión, se reintentará en la próxima carga */ }
+
+  configDoc.onSnapshot((snap)=>{
+    if(snap.exists){
+      settings = Object.assign(settings, snap.data());
+      renderOperarioChips();
+      if(document.querySelector('.tab.active')?.dataset.tab === 'ajustes') renderAjustes();
+    }
+  });
+
+  return new Promise((resolve)=>{
+    partesCol.onSnapshot((snapshot)=>{
+      partes = snapshot.docs.map(d=> d.data());
+      if(!firestoreListo){
+        firestoreListo = true;
+        resolve();
+      }else{
+        refreshEmpresasDatalist();
+        const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+        if(activeTab === 'historial') renderHistorial();
+        if(activeTab === 'ajustes') renderAjustes();
+      }
+    }, ()=>{
+      if(!firestoreListo){ firestoreListo = true; resolve(); }
+      showToast('Sin conexión con la base de datos compartida.');
+    });
+  });
+}
+
+async function guardarParteEnNube(data){
+  try{ await partesCol.doc(data.id).set(data); }
+  catch(e){ showToast('No se pudo guardar en la base de datos compartida.'); }
+}
+async function borrarParteEnNube(id){
+  try{ await partesCol.doc(id).delete(); }
+  catch(e){ showToast('No se pudo eliminar en la base de datos compartida.'); }
+}
+async function persistSettings(){
+  try{ await configDoc.set(settings); }
+  catch(e){ showToast('No se pudo guardar la configuración.'); }
+}
+
+/* ---------------- Tabs ---------------- */
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
+});
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.screen').forEach(s=> s.classList.remove('active'));
+  $('screen-'+name).classList.add('active');
+  if(name==='historial') renderHistorial();
+  if(name==='ajustes') renderAjustes();
+}
+
+/* ---------------- Chips: Estado ---------------- */
+function renderEstadoChips(){
+  const wrap = $('estadoChips');
+  wrap.innerHTML = '';
+  ESTADOS.forEach(e=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = e.key;
+    if(selectedEstado === e.key){
+      chip.style.background = e.color;
+      chip.style.borderColor = e.color;
+      chip.style.color = '#fff';
+    }
+    chip.addEventListener('click', ()=>{ selectedEstado = e.key; renderEstadoChips(); clearFieldError('estado'); });
+    wrap.appendChild(chip);
+  });
+}
+
+/* ---------------- Chips: Operario ---------------- */
+let addingOperario = false;
+function renderOperarioChips(){
+  const wrap = $('operarioChips');
+  wrap.innerHTML = '';
+  settings.operarios.forEach(name=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = name;
+    if(selectedOperarios.has(name)){
+      chip.style.background = 'var(--ink)';
+      chip.style.borderColor = 'var(--ink)';
+      chip.style.color = '#fff';
+    }
+    chip.addEventListener('click', ()=>{
+      selectedOperarios.has(name) ? selectedOperarios.delete(name) : selectedOperarios.add(name);
+      renderOperarioChips();
+      clearFieldError('operario');
+    });
+    wrap.appendChild(chip);
+  });
+
+  if(addingOperario){
+    const inputWrap = document.createElement('div');
+    inputWrap.className = 'chip-add-input show';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Nombre del operario';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Añadir';
+    const confirmAdd = ()=>{
+      const clean = input.value.trim();
+      if(clean){
+        if(!settings.operarios.includes(clean)) settings.operarios.push(clean);
+        selectedOperarios.add(clean);
+        persistSettings();
+        clearFieldError('operario');
+      }
+      addingOperario = false;
+      renderOperarioChips();
+    };
+    btn.addEventListener('click', confirmAdd);
+    input.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter'){ ev.preventDefault(); confirmAdd(); } });
+    inputWrap.appendChild(input);
+    inputWrap.appendChild(btn);
+    wrap.appendChild(inputWrap);
+    setTimeout(()=> input.focus(), 0);
+  }else{
+    const addChip = document.createElement('div');
+    addChip.className = 'chip add';
+    addChip.textContent = '+ Añadir';
+    addChip.addEventListener('click', ()=>{ addingOperario = true; renderOperarioChips(); });
+    wrap.appendChild(addChip);
+  }
+}
+
+/* ---------------- Total horas ---------------- */
+function timeToMinutes(t){
+  if(!t) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h*60+m;
+}
+function minutosDesdeNotas(notas){
+  if(!notas) return null;
+  const t = notas.toLowerCase();
+  if(/todo\s+el\s+d[ií]a|d[ií]a\s+completo|jornada\s+completa/.test(t)) return 8*60;
+  if(/1\s*\/\s*2\s*d[ií]a|mitad\s+de\s+d[ií]a|mitad\s+del\s+d[ií]a|media\s+jornada|medio\s+d[ií]a/.test(t)) return 4*60;
+  return null;
+}
+function pintarHoras(totalMin){
+  const el = $('totalHorasValue');
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  el.innerHTML = h + 'h <span class="unit">' + String(m).padStart(2,'0') + 'm</span>';
+  return { decimal: Math.round((totalMin/60)*100)/100, formatted: h+'h '+String(m).padStart(2,'0')+'m' };
+}
+function computeHoras(){
+  const ini = timeToMinutes($('f-horaInicio').value);
+  const fin = timeToMinutes($('f-horaFin').value);
+  if(ini!==null && fin!==null && fin>ini){
+    return pintarHoras(fin - ini);
+  }
+  const desdeNotas = minutosDesdeNotas($('f-notas').value);
+  if(desdeNotas !== null){
+    return pintarHoras(desdeNotas);
+  }
+  return pintarHoras(0);
+}
+$('f-horaInicio').addEventListener('input', computeHoras);
+$('f-horaFin').addEventListener('input', computeHoras);
+$('f-notas').addEventListener('input', computeHoras);
+
+/* ---------------- Validation ---------------- */
+function clearFieldError(key){
+  const map = { numero:'f-numero', fechaReal:'f-fechaReal', empresa:'f-empresa', actividad:'f-actividad' };
+  if(map[key]) $(map[key]).classList.remove('err');
+  const err = $('err-'+key);
+  if(err) err.classList.remove('show');
+}
+function setFieldError(key, inputId){
+  if(inputId) $(inputId).classList.add('err');
+  const err = $('err-'+key);
+  if(err) err.classList.add('show');
+}
+function validateForm(){
+  let valid = true;
+  ['numero','fechaReal','empresa','actividad','estado','operario'].forEach(k=> clearFieldError(k));
+
+  if(!$('f-numero').value.trim()){ setFieldError('numero','f-numero'); valid = false; }
+  if(!$('f-fechaReal').value){ setFieldError('fechaReal','f-fechaReal'); valid = false; }
+  if(!$('f-empresa').value.trim()){ setFieldError('empresa','f-empresa'); valid = false; }
+  if(!$('f-actividad').value.trim()){ setFieldError('actividad','f-actividad'); valid = false; }
+  if(!selectedEstado){ setFieldError('estado'); valid = false; }
+  if(selectedOperarios.size===0){ setFieldError('operario'); valid = false; }
+  return valid;
+}
+
+/* ---------------- Empresas autocomplete ---------------- */
+function refreshEmpresasDatalist(){
+  const dl = $('empresasList');
+  dl.innerHTML = '';
+  const set = new Set(partes.map(p=> p.empresa));
+  set.forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  });
+}
+
+/* ---------------- Numero sugerido ---------------- */
+function suggestNextNumero(){
+  const nums = partes.map(p=> parseInt(p.numero,10)).filter(n=> !isNaN(n));
+  const next = nums.length ? Math.max(...nums)+1 : 506700;
+  $('f-numero').value = next;
+  $('ticketPreview').textContent = next;
+}
+$('f-numero').addEventListener('input', ()=>{
+  $('ticketPreview').textContent = $('f-numero').value || '—';
+  clearFieldError('numero');
+});
+$('f-fechaReal').addEventListener('input', ()=> clearFieldError('fechaReal'));
+$('f-empresa').addEventListener('input', ()=> clearFieldError('empresa'));
+$('f-actividad').addEventListener('input', ()=> clearFieldError('actividad'));
+
+/* ---------------- Guardar / editar parte ---------------- */
+$('parteForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if(!validateForm()) return;
+
+  const horas = computeHoras();
+  const data = {
+    id: editingId || ('p_'+Date.now()),
+    numero: $('f-numero').value.trim(),
+    avisoFecha: $('f-avisoFecha').value,
+    fechaReal: $('f-fechaReal').value,
+    empresa: $('f-empresa').value.trim(),
+    actividad: $('f-actividad').value.trim(),
+    estado: selectedEstado,
+    operario: Array.from(selectedOperarios).join(', '),
+    horaInicio: $('f-horaInicio').value,
+    horaFin: $('f-horaFin').value,
+    totalHorasDecimal: horas.decimal,
+    totalHorasFormato: horas.formatted,
+    facturada: $('f-facturada').checked,
+    notas: $('f-notas').value.trim(),
+    createdAt: editingId ? ((partes.find(p=>p.id===editingId) || {}).createdAt || Date.now()) : Date.now(),
+  };
+
+  const wasEditing = !!editingId;
+  showToast(wasEditing ? 'Parte actualizado' : 'Parte guardado correctamente');
+
+  try{ resetForm(); }catch(e){}
+  guardarParteEnNube(data);
+});
+
+$('cancelEditBtn').addEventListener('click', ()=> resetForm());
+
+function resetForm(){
+  editingId = null;
+  $('parteForm').reset();
+  $('f-fechaReal').value = todayISO();
+  $('f-facturada').checked = false;
+  selectedEstado = null;
+  selectedOperarios = new Set();
+  renderEstadoChips();
+  renderOperarioChips();
+  computeHoras();
+  suggestNextNumero();
+  $('formTitle').textContent = 'Nuevo parte';
+  $('saveBtnLabel').textContent = 'Guardar parte';
+  $('cancelEditBtn').hidden = true;
+  ['numero','fechaReal','empresa','actividad','estado','operario'].forEach(k=> clearFieldError(k));
+}
+
+function editParte(id){
+  const p = partes.find(x=> x.id===id);
+  if(!p) return;
+  editingId = id;
+  $('f-numero').value = p.numero;
+  $('ticketPreview').textContent = p.numero;
+  $('f-avisoFecha').value = p.avisoFecha || '';
+  $('f-fechaReal').value = p.fechaReal || '';
+  $('f-empresa').value = p.empresa || '';
+  $('f-actividad').value = p.actividad || '';
+  selectedEstado = p.estado;
+  selectedOperarios = new Set((p.operario||'').split(',').map(s=>s.trim()).filter(Boolean));
+  $('f-horaInicio').value = p.horaInicio || '';
+  $('f-horaFin').value = p.horaFin || '';
+  $('f-facturada').checked = !!p.facturada;
+  $('f-notas').value = p.notas || '';
+  renderEstadoChips();
+  renderOperarioChips();
+  computeHoras();
+  $('formTitle').textContent = 'Editar parte';
+  $('saveBtnLabel').textContent = 'Guardar cambios';
+  $('cancelEditBtn').hidden = false;
+  switchTab('nuevo');
+}
+
+function deleteParte(id){
+  showToast('Parte eliminado');
+  borrarParteEnNube(id);
+}
+
+/* ---------------- Historial ---------------- */
+function statusColor(estado){
+  const e = ESTADOS.find(x=> x.key===estado);
+  return e ? e.color : 'var(--text-muted)';
+}
+function renderFilterChips(){
+  const wrap = $('filterChips');
+  wrap.innerHTML = '';
+  const opts = ['Todos', ...ESTADOS.map(e=>e.key)];
+  opts.forEach(opt=>{
+    const chip = document.createElement('div');
+    chip.className = 'filter-chip' + (activeFilter===opt ? ' active' : '');
+    chip.textContent = opt;
+    chip.addEventListener('click', ()=>{ activeFilter = opt; renderHistorial(); });
+    wrap.appendChild(chip);
+  });
+}
+function renderHistorial(){
+  renderFilterChips();
+  const q = ($('searchInput').value || '').toLowerCase();
+  const claveFecha = (p) => /^\d{4}-\d{2}-\d{2}$/.test(p.fechaReal || '') ? p.fechaReal : '0000-00-00';
+  let list = [...partes].sort((a,b)=> claveFecha(b).localeCompare(claveFecha(a)) || b.createdAt-a.createdAt);
+  if(activeFilter!=='Todos') list = list.filter(p=> p.estado===activeFilter);
+  if(q) list = list.filter(p=>
+    (p.empresa||'').toLowerCase().includes(q) ||
+    (p.actividad||'').toLowerCase().includes(q) ||
+    (p.operario||'').toLowerCase().includes(q) ||
+    (p.numero||'').toLowerCase().includes(q)
+  );
+
+  $('historialCount').textContent = partes.length + (partes.length===1 ? ' parte registrado' : ' partes registrados');
+
+  const container = $('historialList');
+  container.innerHTML = '';
+
+  if(list.length===0){
+    container.innerHTML = `
+      <div class="empty-state">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <div class="t1">${partes.length===0 ? 'Todavía no hay partes' : 'Sin resultados'}</div>
+        <div class="t2">${partes.length===0 ? 'Crea el primer parte desde la pestaña Nuevo.' : 'Prueba a cambiar la búsqueda o el filtro.'}</div>
+      </div>`;
+    return;
+  }
+
+  list.forEach(p=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-top">
+        <div>
+          <div class="card-client">${escapeHtml(p.empresa)}</div>
+          <div class="card-activity">${escapeHtml(p.actividad)}</div>
+        </div>
+        <div class="card-num">Nº ${escapeHtml(p.numero)}</div>
+      </div>
+      <div class="card-meta">
+        <span><span class="status-dot" style="background:${statusColor(p.estado)}"></span>${escapeHtml(p.estado||'—')}</span>
+        <span>${formatFechaShow(p.fechaReal)}</span>
+        <span>${escapeHtml(p.operario||'—')}</span>
+        <span>${p.totalHorasFormato || '0h 00m'}</span>
+      </div>
+      <div class="card-detail ${confirmingDeleteId === p.id ? 'show' : ''}" id="detail-${p.id}">
+        <div class="d-row"><div class="d-label">Fecha aviso</div>${formatFechaShow(p.avisoFecha) || '—'}</div>
+        <div class="d-row"><div class="d-label">Horario</div>${p.horaInicio || '—'} – ${p.horaFin || '—'}</div>
+        <div class="d-row"><div class="d-label">Facturada</div>${p.facturada ? 'Sí' : 'No'}</div>
+        ${p.notas ? `<div class="d-row"><div class="d-label">Notas</div>${escapeHtml(p.notas)}</div>` : ''}
+        ${confirmingDeleteId === p.id ? `
+        <div class="card-actions">
+          <div class="icon-btn" data-action="cancel-delete" data-id="${p.id}">Cancelar</div>
+          <div class="icon-btn danger" data-action="confirm-delete" data-id="${p.id}">Sí, eliminar</div>
+        </div>
+        ` : `
+        <div class="card-actions">
+          <div class="icon-btn" data-action="edit" data-id="${p.id}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.121 2.121 0 113 3L10 17l-4 1 1-4z"/></svg>
+            Editar
+          </div>
+          <div class="icon-btn danger" data-action="delete" data-id="${p.id}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            Eliminar
+          </div>
+        </div>
+        `}
+      </div>
+    `;
+    card.addEventListener('click', (ev)=>{
+      if(ev.target.closest('.icon-btn')) return;
+      $('detail-'+p.id).classList.toggle('show');
+    });
+    container.appendChild(card);
+  });
+
+  container.querySelectorAll('[data-action="edit"]').forEach(b=> b.addEventListener('click', ()=> editParte(b.dataset.id)));
+  container.querySelectorAll('[data-action="delete"]').forEach(b=> b.addEventListener('click', ()=>{
+    confirmingDeleteId = b.dataset.id;
+    renderHistorial();
+  }));
+  container.querySelectorAll('[data-action="cancel-delete"]').forEach(b=> b.addEventListener('click', ()=>{
+    confirmingDeleteId = null;
+    renderHistorial();
+  }));
+  container.querySelectorAll('[data-action="confirm-delete"]').forEach(b=> b.addEventListener('click', ()=>{
+    confirmingDeleteId = null;
+    deleteParte(b.dataset.id);
+  }));
+}
+$('searchInput').addEventListener('input', renderHistorial);
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
+}
+function formatFechaShow(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/* ---------------- Ajustes ---------------- */
+function renderAjustes(){
+  $('f-emailDestino').value = settings.email || '';
+  renderOperariosTagList();
+  $('statTotal').textContent = partes.length;
+  const totalH = partes.reduce((s,p)=> s + (p.totalHorasDecimal||0), 0);
+  $('statHoras').textContent = Math.round(totalH*10)/10;
+  const month = todayISO().slice(0,7);
+  $('statMes').textContent = partes.filter(p=> (p.fechaReal||'').startsWith(month)).length;
+}
+function renderOperariosTagList(){
+  const wrap = $('operariosTagList');
+  wrap.innerHTML = '';
+  settings.operarios.forEach(name=>{
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `<span>${escapeHtml(name)}</span><button aria-label="Eliminar">×</button>`;
+    tag.querySelector('button').addEventListener('click', ()=>{
+      settings.operarios = settings.operarios.filter(n=> n!==name);
+      persistSettings();
+      renderOperariosTagList();
+    });
+    wrap.appendChild(tag);
+  });
+}
+$('addOperarioBtn').addEventListener('click', ()=>{
+  const input = $('newOperarioInput');
+  const name = input.value.trim();
+  if(name && !settings.operarios.includes(name)){
+    settings.operarios.push(name);
+    persistSettings();
+    renderOperariosTagList();
+    input.value = '';
+  }
+});
+$('saveEmailBtn').addEventListener('click', async ()=>{
+  settings.email = $('f-emailDestino').value.trim();
+  await persistSettings();
+  showToast('Correo guardado');
+});
+
+/* ---------------- Exportar a Excel (fiel al diseño original) ---------------- */
+function parseISODateLocal(iso){
+  if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [y,m,d] = iso.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function timeAsDate(hhmm){
+  const mins = timeToMinutes(hhmm);
+  if(mins === null) return null;
+  return new Date(2000, 0, 1, Math.floor(mins/60), mins%60);
+}
+async function buildWorkbook(){
+  const headers = ['Nº Parte','Fecha Aviso','Fecha Realización','Empresa/cliente','Actividad','Estado','Operario','Hora Inicio','Hora Fin','Total Horas','Facturada','Notas'];
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('TRABAJOS DIARIOS', { views: [{ showGridLines: false }] });
+
+  ws.mergeCells(1, 1, 1, headers.length);
+  const title = ws.getCell(1, 1);
+  title.value = 'LISTA DE TRABAJOS DIARIOS';
+  title.font = { name: 'Century Gothic', size: 14, bold: true, color: { argb: 'FF16243C' } };
+  title.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 28;
+
+  ws.addRow(headers);
+  const headerRow = ws.getRow(2);
+  headerRow.height = 22;
+  headerRow.eachCell(c => {
+    c.font = { name: 'Century Gothic', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF16243C' } };
+    c.alignment = { horizontal: 'center', vertical: 'middle' };
+    c.border = { left: { style: 'thin', color: { argb: 'FF0F1A2B' } } };
+  });
+
+  const sorted = [...partes].sort((a, b) => (a.fechaReal || '').localeCompare(b.fechaReal || ''));
+  sorted.forEach((p, idx) => {
+    const rowIndex = idx + 3;
+    const row = ws.addRow([
+      p.numero || '',
+      parseISODateLocal(p.avisoFecha) || '',
+      parseISODateLocal(p.fechaReal) || '',
+      p.empresa || '',
+      p.actividad || '',
+      p.estado || '',
+      p.operario || '',
+      timeAsDate(p.horaInicio) || '',
+      timeAsDate(p.horaFin) || '',
+      null,
+      p.facturada ? 'Sí' : 'No',
+      p.notas || '',
+    ]);
+    row.getCell(2).numFmt = 'dd/mm/yyyy';
+    row.getCell(3).numFmt = 'dd/mm/yyyy';
+    row.getCell(8).numFmt = 'hh:mm AM/PM';
+    row.getCell(9).numFmt = 'hh:mm AM/PM';
+    if (p.horaInicio && p.horaFin) {
+      row.getCell(10).value = { formula: `J${rowIndex}-I${rowIndex}` };
+      row.getCell(10).numFmt = '[h]:mm';
+    } else {
+      row.getCell(10).value = 0;
+      row.getCell(10).numFmt = '[h]:mm';
+    }
+    row.eachCell((c, colNumber) => {
+      if (!c.font) c.font = { name: 'Century Gothic', size: 10 };
+      c.alignment = { ...c.alignment, vertical: 'middle', wrapText: colNumber === 5 };
+      c.border = { left: { style: 'thin', color: { argb: 'FFE3E6EB' } } };
+    });
+    if (idx % 2 === 1) {
+      row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F5F7' } }; });
+    }
+  });
+
+  ws.columns = [
+    { width: 11 }, { width: 13 }, { width: 15 }, { width: 24 }, { width: 44 },
+    { width: 13 }, { width: 20 }, { width: 11 }, { width: 11 }, { width: 11 },
+    { width: 10 }, { width: 32 },
+  ];
+
+  return wb;
+}
+async function exportExcel(){
+  if(partes.length===0){ showToast('Todavía no hay partes que exportar'); return; }
+  try{
+    const wb = await buildWorkbook();
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Registro_trabajos_${todayISO()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Excel exportado');
+  }catch(e){
+    showToast('No se pudo generar el Excel. Inténtalo de nuevo.');
+  }
+}
+$('exportBtnSettings').addEventListener('click', exportExcel);
+
+/* ---------------- Email resumen ---------------- */
+$('emailBtnSettings').addEventListener('click', ()=>{
+  if(!settings.email){ showToast('Configura primero un correo de destino'); return; }
+  const recent = [...partes].sort((a,b)=> b.createdAt-a.createdAt).slice(0,5);
+  const body = recent.map(p=> `Nº ${p.numero} · ${p.empresa} · ${p.estado} · ${p.totalHorasFormato}`).join('%0D%0A');
+  const subject = encodeURIComponent('Partes de trabajo — GLOBALMOVIL');
+  const mailto = `mailto:${encodeURIComponent(settings.email)}?subject=${subject}&body=Resumen%20de%20los%20últimos%20partes%3A%0D%0A%0D%0A${body}%0D%0A%0D%0A(Adjunta%20el%20Excel%20exportado%20antes%20de%20enviar)`;
+  window.open(mailto, '_blank');
+});
+
+/* ---------------- Borrar todo ---------------- */
+$('deleteAllBtn').addEventListener('click', ()=> $('deleteConfirmRow').classList.add('show'));
+$('cancelDeleteBtn').addEventListener('click', ()=> $('deleteConfirmRow').classList.remove('show'));
+$('confirmDeleteBtn').addEventListener('click', async ()=>{
+  try{
+    const snap = await partesCol.get();
+    const batch = db.batch();
+    snap.docs.forEach(d=> batch.delete(d.ref));
+    await batch.commit();
+  }catch(e){
+    showToast('No se pudo borrar en la base de datos compartida.');
+  }
+  $('deleteConfirmRow').classList.remove('show');
+  renderAjustes();
+  showToast('Todos los partes han sido eliminados');
+});
+
+/* ---------------- Init ---------------- */
+async function init(){
+  try{
+    await loadAll();
+    renderEstadoChips();
+    renderOperarioChips();
+    refreshEmpresasDatalist();
+    resetForm();
+  }catch(e){
+    partes = partes || [];
+    settings = settings || { email:'', operarios:['Fernando','Iván','Constantin'] };
+  }finally{
+    $('loadingVeil').style.display = 'none';
+  }
+}
+init();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{ /* sin soporte o sin HTTPS, no es crítico */ });
+  });
+}
+</script>
+</body>
+</html>
