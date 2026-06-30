@@ -1045,7 +1045,7 @@ async function exportExcel(){
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Registro_trabajos_${todayISO()}.xlsx`;
+    a.download = `GLOBALMOVIL_Partes_de_trabajos_diarios_${todayISO()}.xlsx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
