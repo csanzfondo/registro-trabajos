@@ -211,6 +211,24 @@
   .loading-veil .spin{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .loading-veil span{font-size:12px;color:var(--text-muted);font-weight:600;}
+
+  /* ---------- Separador de sección ---------- */
+  .sep-section{display:flex;align-items:center;gap:10px;margin:6px 0 18px;}
+  .sep-section::before,.sep-section::after{content:'';flex:1;height:1px;background:var(--line);}
+  .sep-section span{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);white-space:nowrap;}
+
+  /* ---------- Firma ---------- */
+  .firma-wrap{position:relative;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;touch-action:none;}
+  .firma-wrap canvas{display:block;width:100%;height:160px;cursor:crosshair;}
+  .firma-clear{position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:5px;
+    background:var(--grey-soft);border:none;border-radius:7px;padding:6px 10px;
+    font-size:11.5px;font-weight:600;color:var(--steel);cursor:pointer;}
+  .firma-hint{position:absolute;bottom:0;left:0;right:0;text-align:center;padding:10px;
+    font-size:11.5px;color:var(--text-muted);pointer-events:none;transition:opacity .2s;}
+  .firma-hint.hidden{opacity:0;}
+  .firma-badge{display:flex;align-items:center;gap:6px;background:var(--green-soft);color:var(--green);
+    border-radius:7px;padding:6px 10px;font-size:11.5px;font-weight:600;margin-top:6px;display:none;}
+  .firma-badge.show{display:flex;}
 </style>
 </head>
 <body>
@@ -320,6 +338,33 @@
         <div class="field">
           <label for="f-notas">Notas (opcional)</label>
           <textarea id="f-notas" placeholder="Observaciones, materiales usados, incidencias…"></textarea>
+        </div>
+
+        <div class="sep-section">
+          <span>Conformidad del cliente</span>
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label for="f-responsable">Nombre del responsable</label>
+            <input type="text" id="f-responsable" placeholder="Nombre completo">
+          </div>
+          <div class="field">
+            <label for="f-dni">DNI / NIF</label>
+            <input type="text" id="f-dni" placeholder="12345678A" maxlength="9">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Firma del responsable</label>
+          <div class="firma-wrap" id="firmaWrap">
+            <canvas id="firmaCanvas"></canvas>
+            <button type="button" class="firma-clear" id="firmaClearBtn" title="Borrar firma">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+              Borrar
+            </button>
+            <div class="firma-hint" id="firmaHint">Firme aquí con el dedo</div>
+          </div>
         </div>
 
         <button type="submit" class="btn btn-primary">
@@ -542,6 +587,84 @@ async function persistSettings(){
   catch(e){ showToast('No se pudo guardar la configuración.'); }
 }
 
+/* ---------------- Canvas de firma ---------------- */
+let firmaHayTrazos = false;
+let firmaDibujando = false;
+let firmaCtx = null;
+let firmaCanvas = null;
+
+function initFirma(){
+  firmaCanvas = $('firmaCanvas');
+  if(!firmaCanvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = firmaCanvas.getBoundingClientRect();
+  firmaCanvas.width  = (rect.width  || firmaCanvas.offsetWidth  || 340) * dpr;
+  firmaCanvas.height = (rect.height || firmaCanvas.offsetHeight || 160) * dpr;
+  firmaCtx = firmaCanvas.getContext('2d');
+  firmaCtx.scale(dpr, dpr);
+  firmaCtx.strokeStyle = '#16243C';
+  firmaCtx.lineWidth = 2.2;
+  firmaCtx.lineCap = 'round';
+  firmaCtx.lineJoin = 'round';
+
+  const getXY = (e) => {
+    const r = firmaCanvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  };
+  const start = (e) => {
+    e.preventDefault();
+    firmaDibujando = true;
+    const {x, y} = getXY(e);
+    firmaCtx.beginPath();
+    firmaCtx.moveTo(x, y);
+    $('firmaHint').classList.add('hidden');
+  };
+  const move = (e) => {
+    if(!firmaDibujando) return;
+    e.preventDefault();
+    const {x, y} = getXY(e);
+    firmaCtx.lineTo(x, y);
+    firmaCtx.stroke();
+    firmaHayTrazos = true;
+  };
+  const end = (e) => { e.preventDefault(); firmaDibujando = false; };
+
+  firmaCanvas.addEventListener('mousedown',  start, {passive:false});
+  firmaCanvas.addEventListener('mousemove',  move,  {passive:false});
+  firmaCanvas.addEventListener('mouseup',    end,   {passive:false});
+  firmaCanvas.addEventListener('touchstart', start, {passive:false});
+  firmaCanvas.addEventListener('touchmove',  move,  {passive:false});
+  firmaCanvas.addEventListener('touchend',   end,   {passive:false});
+}
+
+function limpiarFirma(){
+  if(!firmaCtx || !firmaCanvas) return;
+  firmaCtx.clearRect(0, 0, firmaCanvas.width, firmaCanvas.height);
+  firmaHayTrazos = false;
+  $('firmaHint').classList.remove('hidden');
+}
+
+function getFirmaBase64(){
+  if(!firmaCanvas || !firmaHayTrazos) return '';
+  return firmaCanvas.toDataURL('image/png');
+}
+
+function setFirmaDesdeBase64(dataUrl){
+  if(!dataUrl || !firmaCtx || !firmaCanvas) return;
+  const img = new Image();
+  img.onload = () => {
+    const dpr = window.devicePixelRatio || 1;
+    firmaCtx.clearRect(0, 0, firmaCanvas.width, firmaCanvas.height);
+    firmaCtx.drawImage(img, 0, 0, firmaCanvas.width / dpr, firmaCanvas.height / dpr);
+    firmaHayTrazos = true;
+    $('firmaHint').classList.add('hidden');
+  };
+  img.src = dataUrl;
+}
+
+$('firmaClearBtn').addEventListener('click', limpiarFirma);
+
 /* ---------------- Tabs ---------------- */
 document.querySelectorAll('.tab').forEach(btn=>{
   btn.addEventListener('click', ()=> switchTab(btn.dataset.tab));
@@ -737,6 +860,9 @@ $('parteForm').addEventListener('submit', async (e)=>{
     totalHorasFormato: horas.formatted,
     facturada: $('f-facturada').checked,
     notas: $('f-notas').value.trim(),
+    responsable: $('f-responsable').value.trim(),
+    dni: $('f-dni').value.trim(),
+    firma: getFirmaBase64(),
     createdAt: editingId ? ((partes.find(p=>p.id===editingId) || {}).createdAt || Date.now()) : Date.now(),
   };
 
@@ -754,6 +880,9 @@ function resetForm(){
   $('parteForm').reset();
   $('f-fechaReal').value = todayISO();
   $('f-facturada').checked = false;
+  $('f-responsable').value = '';
+  $('f-dni').value = '';
+  limpiarFirma();
   selectedEstado = null;
   selectedOperarios = new Set();
   renderEstadoChips();
@@ -782,6 +911,10 @@ function editParte(id){
   $('f-horaFin').value = p.horaFin || '';
   $('f-facturada').checked = !!p.facturada;
   $('f-notas').value = p.notas || '';
+  $('f-responsable').value = p.responsable || '';
+  $('f-dni').value = p.dni || '';
+  limpiarFirma();
+  if(p.firma) setFirmaDesdeBase64(p.firma);
   renderEstadoChips();
   renderOperarioChips();
   computeHoras();
@@ -863,6 +996,8 @@ function renderHistorial(){
         <div class="d-row"><div class="d-label">Horario</div>${p.horaInicio || '—'} – ${p.horaFin || '—'}</div>
         <div class="d-row"><div class="d-label">Facturada</div>${p.facturada ? 'Sí' : 'No'}</div>
         ${p.notas ? `<div class="d-row"><div class="d-label">Notas</div>${escapeHtml(p.notas)}</div>` : ''}
+        ${p.responsable ? `<div class="d-row"><div class="d-label">Responsable</div>${escapeHtml(p.responsable)}${p.dni ? ' · ' + escapeHtml(p.dni) : ''}</div>` : ''}
+        ${p.firma ? `<div class="d-row"><div class="d-label">Firma</div><img src="${p.firma}" style="max-width:100%;border-radius:6px;border:1px solid var(--line);margin-top:4px;background:#fff;" alt="Firma"></div>` : ''}
         ${confirmingDeleteId === p.id ? `
         <div class="card-actions">
           <div class="icon-btn" data-action="cancel-delete" data-id="${p.id}">Cancelar</div>
@@ -969,7 +1104,7 @@ function timeAsDate(hhmm){
   return new Date(2000, 0, 1, Math.floor(mins/60), mins%60);
 }
 async function buildWorkbook(){
-  const headers = ['Nº Parte','Fecha Aviso','Fecha Realización','Empresa/cliente','Actividad','Estado','Operario','Hora Inicio','Hora Fin','Total Horas','Facturada','Notas'];
+  const headers = ['Nº Parte','Fecha Aviso','Fecha Realización','Empresa/cliente','Actividad','Estado','Operario','Hora Inicio','Hora Fin','Total Horas','Facturada','Notas','Responsable','DNI'];
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('TRABAJOS DIARIOS', { views: [{ showGridLines: false }] });
 
@@ -1006,6 +1141,8 @@ async function buildWorkbook(){
       null,
       p.facturada ? 'Sí' : 'No',
       p.notas || '',
+      p.responsable || '',
+      p.dni || '',
     ]);
     row.getCell(2).numFmt = 'dd/mm/yyyy';
     row.getCell(3).numFmt = 'dd/mm/yyyy';
@@ -1031,7 +1168,7 @@ async function buildWorkbook(){
   ws.columns = [
     { width: 11 }, { width: 13 }, { width: 15 }, { width: 24 }, { width: 44 },
     { width: 13 }, { width: 20 }, { width: 11 }, { width: 11 }, { width: 11 },
-    { width: 10 }, { width: 32 },
+    { width: 10 }, { width: 32 }, { width: 22 }, { width: 13 },
   ];
 
   return wb;
@@ -1092,6 +1229,7 @@ async function init(){
     renderOperarioChips();
     refreshEmpresasDatalist();
     resetForm();
+    setTimeout(initFirma, 0);
   }catch(e){
     partes = partes || [];
     settings = settings || { email:'', operarios:['Fernando','Iván','Constantin'] };
